@@ -18,6 +18,7 @@ DB_PATH = ROOT / "onlineff.sqlite3"
 PORT = int(os.environ.get("PORT", "8000"))
 CAPACITY = 60
 STALE_AFTER = 35
+LOBBY_JOIN_WINDOW = 60
 DB_LOCK = threading.Lock()
 
 
@@ -116,10 +117,10 @@ class Handler(SimpleHTTPRequestHandler):
             row = db.execute("""
                 SELECT m.id FROM matches m
                 LEFT JOIN players p ON p.match_id=m.id
-                WHERE m.updated_at > ?
+                WHERE m.updated_at > ? AND m.created_at >= ?
                 GROUP BY m.id HAVING COUNT(p.token) < ?
-                ORDER BY m.updated_at DESC LIMIT 1
-            """, (now - STALE_AFTER, CAPACITY)).fetchone()
+                ORDER BY m.created_at ASC LIMIT 1
+            """, (now - STALE_AFTER, now - LOBBY_JOIN_WINDOW, CAPACITY)).fetchone()
             if row:
                 match_id = row["id"]
             else:
@@ -204,3 +205,5 @@ if __name__ == "__main__":
     init_db()
     print(f"OnlineFF server running on port {PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+
+

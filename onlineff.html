@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -96,6 +96,16 @@
             margin-top: 30px; background: rgba(255,255,255,0.05); padding: 25px; 
             border-radius: 10px; font-size: 16px; line-height: 1.8; color: #ccc; text-align: center;
         }
+        #playerRadarPanel { position: absolute; top: 16px; right: 16px; width: 210px; padding: 10px; border: 1px solid rgba(255,255,255,.35); border-radius: 10px; color: white; background: rgba(0,0,0,.72); font: 12px 'Segoe UI', sans-serif; text-shadow: 0 1px 2px #000; }
+        #playerRadarTitle { margin-bottom: 6px; font-weight: 800; letter-spacing: 1px; }
+        #playerRadar { display: block; width: 180px; height: 180px; margin: 0 auto; border-radius: 6px; }
+        #distanceList { margin: 7px 0 0; padding: 0; list-style: none; line-height: 1.5; }
+        #distanceList li { display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+        @media (pointer: coarse) {
+            #playerRadarPanel { top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); width: 128px; padding: 6px; font-size: 9px; }
+            #playerRadar { width: 112px; height: 112px; }
+            #distanceList { margin-top: 4px; line-height: 1.3; }
+        }
         .key { 
             background: #222; padding: 4px 10px; border-radius: 4px; 
             border: 1px solid #555; color: white; font-family: monospace; 
@@ -186,6 +196,11 @@
 
     <div id="uiLayer">
         <div id="crosshair"></div>
+        <div id="playerRadarPanel">
+            <div id="playerRadarTitle">MATCH RADAR</div>
+            <canvas id="playerRadar" width="180" height="180" aria-label="Map showing player positions"></canvas>
+            <ul id="distanceList"><li>Waiting for players...</li></ul>
+        </div>
         <div id="centerMessage"></div>
         <div id="interactionMsg">Press [F] to enter vehicle</div>
         
@@ -299,7 +314,11 @@
         floor.receiveShadow = true;
         scene.add(floor);
 
-        const rand = (min, max) => Math.random() * (max - min) + min;
+        let worldSeed = 0x51f15e;
+        const rand = (min, max) => {
+            worldSeed = (1664525 * worldSeed + 1013904223) >>> 0;
+            return min + (worldSeed / 4294967296) * (max - min);
+        };
 
         function createCharacterModel(colorHex) {
             const group = new THREE.Group();
@@ -615,6 +634,16 @@
         }
 
         let currentCar = null;
+
+        function getWorldPlayerPosition() {
+            if (inVehicle && currentCar) return currentCar.position.clone();
+            if (inTrain) {
+                const worldPosition = new THREE.Vector3();
+                playerGroup.getWorldPosition(worldPosition);
+                return worldPosition;
+            }
+            return playerGroup.position.clone();
+        }
         const cars = [];
         for (let i = 0; i < 15; i++) {
             const c = createCar();
@@ -639,6 +668,59 @@
         let syncBusy = false;
         let lastOnlineBotSlots = null;
         let knownRemoteHealth = new Map();
+        const playerRadar = document.getElementById('playerRadar');
+        const radarContext = playerRadar.getContext('2d');
+        const distanceList = document.getElementById('distanceList');
+
+        function drawPlayerRadar() {
+            const size = playerRadar.width;
+            const center = size / 2;
+            const scale = size / mapSize;
+            const localPosition = getWorldPlayerPosition();
+            radarContext.clearRect(0, 0, size, size);
+            radarContext.fillStyle = '#263b2a';
+            radarContext.fillRect(0, 0, size, size);
+            radarContext.strokeStyle = 'rgba(255,255,255,.18)';
+            radarContext.lineWidth = 1;
+            for (let coordinate = -mapSize / 2; coordinate <= mapSize / 2; coordinate += 200) {
+                const grid = center + coordinate * scale;
+                radarContext.beginPath(); radarContext.moveTo(grid, 0); radarContext.lineTo(grid, size); radarContext.stroke();
+                radarContext.beginPath(); radarContext.moveTo(0, grid); radarContext.lineTo(size, grid); radarContext.stroke();
+            }
+            radarContext.strokeStyle = 'rgba(76,190,255,.9)';
+            radarContext.lineWidth = 2;
+            radarContext.beginPath(); radarContext.arc(center, center, zoneRadius * scale, 0, Math.PI * 2); radarContext.stroke();
+
+            const nearby = [];
+            remotePlayers.forEach((model, id) => {
+                const distance = localPosition.distanceTo(model.position);
+                nearby.push({ name: model.userData.playerName || 'Player', distance });
+                const x = center + model.position.x * scale;
+                const y = center + model.position.z * scale;
+                radarContext.fillStyle = '#ff554b';
+                radarContext.beginPath(); radarContext.arc(x, y, 4, 0, Math.PI * 2); radarContext.fill();
+                radarContext.fillStyle = '#fff'; radarContext.font = '9px sans-serif';
+                radarContext.fillText((model.userData.playerName || 'P').slice(0, 7), x + 5, y - 4);
+            });
+            const localX = center + localPosition.x * scale;
+            const localY = center + localPosition.z * scale;
+            radarContext.fillStyle = '#ffe66d';
+            radarContext.beginPath(); radarContext.arc(localX, localY, 5, 0, Math.PI * 2); radarContext.fill();
+            radarContext.strokeStyle = '#17202a'; radarContext.lineWidth = 2; radarContext.stroke();
+
+            nearby.sort((a, b) => a.distance - b.distance);
+            distanceList.replaceChildren();
+            if (!nearby.length) {
+                const item = document.createElement('li'); item.textContent = 'No other real players'; distanceList.appendChild(item);
+                return;
+            }
+            nearby.slice(0, 4).forEach(player => {
+                const item = document.createElement('li');
+                const name = document.createElement('span'); name.textContent = player.name.slice(0, 14);
+                const distance = document.createElement('span'); distance.textContent = `${Math.round(player.distance)} m`;
+                item.append(name, distance); distanceList.appendChild(item);
+            });
+        }
 
         function addBot() {
             const enemy = createCharacterModel(0xe74c3c);
@@ -661,7 +743,7 @@
             if (!onlineToken || syncBusy || gameState === 'dead' || gameState === 'won') return;
             syncBusy = true;
             (async () => {
-                const position = inVehicle && currentCar ? currentCar.position : playerGroup.position;
+                const position = getWorldPlayerPosition();
                 await fetch('/api/update', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token: onlineToken, x: position.x, y: position.y, z: position.z,
                         yaw: playerGroup.rotation.y, health: hp }) });
@@ -708,6 +790,7 @@
                 lastOnlineBotSlots = state.bots;
                 alive = enemies.length + state.players.filter(player => player.alive).length;
                 uiAlive.innerText = alive;
+                drawPlayerRadar();
             })().catch(error => {
                 document.getElementById('onlineStatus').innerText = error.message;
                 document.getElementById('onlineStatus').style.color = '#e74c3c';
@@ -1317,7 +1400,7 @@
             }
 
             if (gameState === 'playing' || gameState === 'dropping') {
-                const playerTarget = inVehicle && currentCar ? currentCar.position : playerGroup.position;
+                const playerTarget = getWorldPlayerPosition();
                 for (const enemy of [...enemies]) {
                     let target = playerTarget;
                     let targetEnemy = null;
@@ -1380,7 +1463,3 @@
     </script>
 </body>
 </html>
-
-
-
-

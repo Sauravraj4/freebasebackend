@@ -1,4 +1,4 @@
-﻿# OnlineFF
+# OnlineFF
 
 `onlineff.html` is the multiplayer Three.js game. `server.py` serves the game and its matchmaking, presence, position, and player damage API from one web service. It uses SQLite for temporary match sessions; no records are required to play.
 
@@ -18,6 +18,6 @@ Create a **Web Service** for this GitHub repository and use:
 - **Build Command:** `pip install -r requirements.txt`
 - **Start Command:** `python server.py`
 
-The server binds to Render's `PORT` environment variable and `/` opens the multiplayer game. Share the service's `onrender.com` URL with players. The game synchronizes human positions and player versus player damage; open lobby slots are local browser bots.
+The server binds to Render's `PORT` environment variable and `/` opens the multiplayer game. Share the service's `onrender.com` URL with players. A match accepts new players for 60 seconds after its first player joins. Players arriving later start in a new lobby, while existing matches continue. The game synchronizes human positions and player versus player damage; the shared map includes a radar with real-player markers and distances. Open lobby slots are local browser bots.
 
 SQLite data is temporary on Render's default filesystem and can reset after a restart or redeploy. That is fine for live play because sessions are recreated as players join. Inactive players are removed after 35 seconds. This is a small prototype without accounts or production security hardening.
