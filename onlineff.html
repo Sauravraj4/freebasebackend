@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -101,6 +101,45 @@
             border: 1px solid #555; color: white; font-family: monospace; 
         }
 
+
+        #mobileControls, #lookZone, #rotatePrompt { display: none; }
+        @media (pointer: coarse) {
+            #mainMenu { box-sizing: border-box; padding: 18px; overflow-y: auto; justify-content: flex-start; }
+            #mainMenu h1 { font-size: clamp(2rem, 9vw, 3.4rem); text-align: center; margin-top: 4vh; }
+            #mainMenu h2 { font-size: 1rem; }
+            #careerStats { gap: 7px; margin-top: 12px; }
+            .stat-card { min-width: 78px; padding: 8px; font-size: 12px; }
+            .stat-card strong { font-size: 18px; }
+            #playerName { max-width: 42vw; }
+            #btnStart { margin-top: 16px; padding: 12px 32px; font-size: 20px; }
+            .controls { display: none; }
+            #hud { left: 8px; bottom: 8px; gap: 5px; flex-wrap: wrap; max-width: 66vw; }
+            .hud-box { padding: 6px 8px; font-size: 10px; border-width: 1px; }
+            .hud-value { font-size: 16px; margin-top: 2px; }
+            #centerMessage { top: 10%; font-size: clamp(18px, 5vw, 30px); }
+            #interactionMsg { top: 45%; font-size: 17px; }
+            #mobileControls { position: fixed; inset: 0; z-index: 8; display: none; pointer-events: none; touch-action: none; }
+            body.game-active #mobileControls { display: block; }
+            #lookZone { display: block; position: absolute; top: 12%; right: 0; bottom: 0; width: 56%; z-index: 1; pointer-events: auto; touch-action: none; }
+            #movePad { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(20px, env(safe-area-inset-bottom)); width: 132px; height: 132px; border-radius: 50%; background: rgba(0,0,0,.28); border: 2px solid rgba(255,255,255,.55); pointer-events: auto; touch-action: none; }
+            #moveStick { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px; border-radius: 50%; background: rgba(255,255,255,.78); box-shadow: 0 2px 10px #0008; pointer-events: none; }
+            .mobile-action { position: absolute; right: max(16px, env(safe-area-inset-right)); min-width: 64px; min-height: 64px; border: 1px solid #ffffffaa; border-radius: 50%; color: white; background: #14202ddd; font-weight: 800; font-size: 12px; pointer-events: auto; touch-action: none; z-index: 2; }
+            .mobile-action:active, .mobile-action.active { background: #e74c3c; transform: scale(.95); }
+            #jumpBtn { bottom: max(22px, env(safe-area-inset-bottom)); }
+            #shootBtn { bottom: max(96px, calc(env(safe-area-inset-bottom) + 88px)); background: #b52f24e8; }
+            #runBtn { bottom: max(170px, calc(env(safe-area-inset-bottom) + 162px)); }
+            #vehicleBtn { right: max(90px, calc(env(safe-area-inset-right) + 82px)); bottom: max(24px, env(safe-area-inset-bottom)); min-width: 54px; min-height: 54px; }
+            #trainBtn { right: max(90px, calc(env(safe-area-inset-right) + 82px)); bottom: max(88px, calc(env(safe-area-inset-bottom) + 80px)); min-width: 54px; min-height: 54px; }
+            body.game-active #rotatePrompt { display: none; }
+            @media (orientation: portrait) {
+                body.game-active #rotatePrompt { display: flex; }
+                #rotatePrompt { position: fixed; inset: 0; z-index: 30; background: #10151bf2; color: white; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 20px; font-weight: 700; }
+            }
+        }
+        @media (pointer: coarse) and (orientation: landscape) {
+            #mainMenu { justify-content: center; }
+            #mainMenu h1 { margin-top: 0; }
+        }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
     </style>
     <script type="importmap">
@@ -131,7 +170,7 @@
         <button id="btnStart">ENTER MATCH</button>
         <div class="controls">
             Plane Phase: Wait for right moment, then press <span class="key">SPACE</span> to Jump<br><br>
-            <span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> Move 
+            <span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> Move / <span class="key">Shift</span> Run 
             &nbsp;&nbsp;|&nbsp;&nbsp; 
             <span class="key">Mouse</span> Look & Aim 
             &nbsp;&nbsp;|&nbsp;&nbsp; 
@@ -158,6 +197,17 @@
         </div>
     </div>
 
+
+    <div id="rotatePrompt">Rotate your phone to landscape to play</div>
+    <div id="mobileControls" aria-label="Touch game controls">
+        <div id="lookZone" aria-label="Drag here to look"></div>
+        <div id="movePad" aria-label="Move joystick"><div id="moveStick"></div></div>
+        <button class="mobile-action" id="jumpBtn" type="button">JUMP</button>
+        <button class="mobile-action" id="shootBtn" type="button">SHOOT</button>
+        <button class="mobile-action" id="runBtn" type="button">RUN</button>
+        <button class="mobile-action" id="vehicleBtn" type="button">CAR</button>
+        <button class="mobile-action" id="trainBtn" type="button">TRAIN</button>
+    </div>
     <div id="booyahScreen">
         <h1>BOOYAH!</h1>
         <p style="font-size: 24px; color: white; margin-top: 20px;">Congratulations! You are the last survivor.</p>
@@ -665,12 +715,105 @@
         }
         setInterval(syncOnlineMatch, 300);
 
-        const keys = { w: false, a: false, s: false, d: false, space: false };
+        const keys = { w: false, a: false, s: false, d: false, space: false, run: false };
+        const touchDevice = window.matchMedia('(pointer: coarse)').matches;
         let pointerLocked = false;
+
+        function jumpOrDrop() {
+            if (gameState === 'plane') {
+                gameState = 'dropping';
+                playerGroup.position.copy(airplane.position);
+                playerGroup.position.y -= 10;
+                parachute.visible = true;
+                cameraYaw.position.copy(playerGroup.position); cameraYaw.position.y += 1.5;
+                camera.position.set(0, 5, 20);
+                camera.rotation.set(0, 0, 0);
+                showMsg("PARACHUTE DEPLOYED", 3000, "#3498db");
+                crosshair.style.display = 'block';
+            } else if (gameState === 'playing' && isGrounded && !inVehicle) {
+                velocityY = 25;
+                isGrounded = false;
+            }
+        }
+
+        if (touchDevice) {
+            const movePad = document.getElementById('movePad');
+            const moveStick = document.getElementById('moveStick');
+            let movePointer = null;
+            let moveOrigin = null;
+            const resetMove = () => {
+                movePointer = null;
+                keys.w = keys.a = keys.s = keys.d = false;
+                moveStick.style.transform = 'translate(0, 0)';
+            };
+            movePad.addEventListener('pointerdown', event => {
+                event.preventDefault();
+                movePointer = event.pointerId;
+                movePad.setPointerCapture(movePointer);
+                const rect = movePad.getBoundingClientRect();
+                moveOrigin = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            });
+            movePad.addEventListener('pointermove', event => {
+                if (event.pointerId !== movePointer) return;
+                event.preventDefault();
+                const dx = event.clientX - moveOrigin.x;
+                const dy = event.clientY - moveOrigin.y;
+                const max = 40;
+                const x = Math.max(-max, Math.min(max, dx));
+                const y = Math.max(-max, Math.min(max, dy));
+                moveStick.style.transform = `translate(${x}px, ${y}px)`;
+                keys.a = x < -10; keys.d = x > 10;
+                keys.w = y < -10; keys.s = y > 10;
+            });
+            movePad.addEventListener('pointerup', resetMove);
+            movePad.addEventListener('pointercancel', resetMove);
+
+            const lookZone = document.getElementById('lookZone');
+            let lookPointer = null;
+            let lastLook = null;
+            lookZone.addEventListener('pointerdown', event => {
+                if (event.clientX < window.innerWidth * 0.43) return;
+                event.preventDefault();
+                lookPointer = event.pointerId;
+                lastLook = { x: event.clientX, y: event.clientY };
+                lookZone.setPointerCapture(lookPointer);
+            });
+            lookZone.addEventListener('pointermove', event => {
+                if (event.pointerId !== lookPointer) return;
+                event.preventDefault();
+                const dx = event.clientX - lastLook.x;
+                const dy = event.clientY - lastLook.y;
+                cameraYaw.rotation.y -= dx * sensitivity * 2.4;
+                cameraPitch.rotation.x = Math.max(-Math.PI / 6, Math.min(Math.PI / 4, cameraPitch.rotation.x - dy * sensitivity * 2.4));
+                lastLook = { x: event.clientX, y: event.clientY };
+            });
+            const resetLook = () => { lookPointer = null; lastLook = null; };
+            lookZone.addEventListener('pointerup', resetLook);
+            lookZone.addEventListener('pointercancel', resetLook);
+
+            document.getElementById('jumpBtn').addEventListener('pointerdown', event => { event.preventDefault(); jumpOrDrop(); });
+            document.getElementById('shootBtn').addEventListener('pointerdown', event => {
+                event.preventDefault();
+                window.dispatchEvent(new MouseEvent('mousedown', { buttons: 1 }));
+            });
+            document.getElementById('runBtn').addEventListener('pointerdown', event => {
+                event.preventDefault();
+                keys.run = !keys.run;
+                event.currentTarget.classList.toggle('active', keys.run);
+            });
+            document.getElementById('vehicleBtn').addEventListener('pointerdown', event => {
+                event.preventDefault(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' }));
+            });
+            document.getElementById('trainBtn').addEventListener('pointerdown', event => {
+                event.preventDefault(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }));
+            });
+            document.addEventListener('contextmenu', event => event.preventDefault());
+        }
 
         document.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
             if (keys.hasOwnProperty(key)) keys[key] = true;
+            if (key === 'shift') keys.run = true;
             if (key === ' ') {
                 keys.space = true;
                 if (gameState === 'plane') {
@@ -749,6 +892,7 @@
         document.addEventListener('keyup', (e) => {
             const key = e.key.toLowerCase();
             if (keys.hasOwnProperty(key)) keys[key] = false;
+            if (key === 'shift') keys.run = false;
             if (key === ' ') keys.space = false;
         });
 
@@ -775,6 +919,13 @@
                     onlinePlayerId = session.publicId;
                     onlineMatchId = session.matchId;
                     document.getElementById('onlineStatus').innerText = `Match ${session.matchId} | ${session.players} real players | ${session.bots} bots | 60 total`;
+                }
+                if (touchDevice) {
+                    pointerLocked = true;
+                    document.body.classList.add('game-active');
+                    if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+                    startGamePhase();
+                    return;
                 }
                 await document.body.requestPointerLock();
             } catch (err) {
@@ -803,6 +954,7 @@
         });
 
         function startGamePhase() {
+            document.body.classList.add('game-active');
             if (gameState === 'menu') {
                 gameState = 'plane';
                 careerStats.matches++;
@@ -810,7 +962,7 @@
                 mainMenu.style.display = 'none';
                 uiLayer.style.display = 'block';
                 document.getElementById('hud').style.opacity = '0.3'; 
-                showMsg("PRESS SPACE TO JUMP", 10000, "white");
+                showMsg(touchDevice ? "TAP JUMP TO DROP • DRAG RIGHT SIDE TO LOOK" : "PRESS SPACE TO JUMP", 10000, "white");
             } else if (gameState !== 'won' && gameState !== 'dead') {
                 mainMenu.style.display = 'none';
             }
@@ -1012,7 +1164,7 @@
                             const moveDir = moveInput.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw.rotation.y);
                             
                             const oldPos = playerGroup.position.clone();
-                            playerGroup.position.addScaledVector(moveDir, playerSpeed * dt);
+                            playerGroup.position.addScaledVector(moveDir, playerSpeed * (keys.run ? 1.7 : 1) * dt);
                             
                             // Collision Check
                             playerGroup.updateMatrixWorld(true);
@@ -1114,7 +1266,7 @@
                             const worldDir = moveInput.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw.rotation.y);
                             const localDir = worldDir.clone().applyQuaternion(trainGroups[trainIndex].quaternion.clone().invert());
                             
-                            playerGroup.position.addScaledVector(localDir, playerSpeed * dt);
+                            playerGroup.position.addScaledVector(localDir, playerSpeed * (keys.run ? 1.7 : 1) * dt);
 
                             const targetRotation = Math.atan2(localDir.x, localDir.z);
                             let diff = targetRotation - playerGroup.rotation.y;
@@ -1228,3 +1380,7 @@
     </script>
 </body>
 </html>
+
+
+
+
