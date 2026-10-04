@@ -81,6 +81,7 @@
             color: white; z-index: 10;
         }
         #mainMenu h1 { font-size: 5rem; color: #3498db; margin-bottom: 0; text-shadow: 0 4px 15px rgba(52, 152, 219, 0.6); }
+        #creatorCredit { margin-top: 6px; color: #b7c6d8; font-size: 14px; font-weight: 700; letter-spacing: 3px; }
         #careerStats { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 22px; max-width: 760px; }
         .stat-card { min-width: 125px; padding: 12px 16px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; background: rgba(255,255,255,.08); }
         .stat-card strong { display: block; color: #f1c40f; font-size: 24px; margin-top: 4px; }
@@ -117,6 +118,7 @@
             #mainMenu { box-sizing: border-box; padding: 18px; overflow-y: auto; justify-content: flex-start; }
             #mainMenu h1 { font-size: clamp(2rem, 9vw, 3.4rem); text-align: center; margin-top: 4vh; }
             #mainMenu h2 { font-size: 1rem; }
+            #creatorCredit { margin-top: 6px; color: #b7c6d8; font-size: 11px; font-weight: 700; letter-spacing: 2px; }
             #careerStats { gap: 7px; margin-top: 12px; }
             .stat-card { min-width: 78px; padding: 8px; font-size: 12px; }
             .stat-card strong { font-size: 18px; }
@@ -164,6 +166,7 @@
 
     <div id="mainMenu">
         <h1>BATTLE ROYALE</h1>
+        <div id="creatorCredit">CREATED BY SAURAV LILHO</div>
         <h2 style="margin: 8px 0 0; color: #f1c40f;">PLAYER LOBBY</h2>
         <div id="careerStats">
             <div class="stat-card"><span class="stat-label">Matches played</span><strong id="statMatches">0</strong></div>
@@ -621,6 +624,7 @@
         scene.add(cameraYaw);
         cameraYaw.add(cameraPitch);
         cameraPitch.add(camera);
+        if (window.matchMedia('(pointer: coarse)').matches) cameraPitch.rotation.x = 0.06;
 
         const lootGroups = [];
         for (let i = 0; i < 30; i++) {
@@ -779,6 +783,15 @@
                     }
                 }
 
+                const activeRemoteIds = new Set(state.players
+                    .filter(player => player.alive && player.public_id !== onlinePlayerId)
+                    .map(player => player.public_id));
+                for (const [id, model] of remotePlayers) {
+                    if (activeRemoteIds.has(id)) continue;
+                    scene.remove(model);
+                    remotePlayers.delete(id);
+                    knownRemoteHealth.delete(id);
+                }
                 const botSlotChange = lastOnlineBotSlots === null ? 0 : state.bots - lastOnlineBotSlots;
                 if (lastOnlineBotSlots === null) {
                     while (enemies.length > state.bots) scene.remove(enemies.pop());
@@ -791,6 +804,7 @@
                 alive = enemies.length + state.players.filter(player => player.alive).length;
                 uiAlive.innerText = alive;
                 drawPlayerRadar();
+                checkForVictory();
             })().catch(error => {
                 document.getElementById('onlineStatus').innerText = error.message;
                 document.getElementById('onlineStatus').style.color = '#e74c3c';
@@ -866,8 +880,8 @@
                 event.preventDefault();
                 const dx = event.clientX - lastLook.x;
                 const dy = event.clientY - lastLook.y;
-                cameraYaw.rotation.y -= dx * sensitivity * 2.4;
-                cameraPitch.rotation.x = Math.max(-Math.PI / 6, Math.min(Math.PI / 4, cameraPitch.rotation.x - dy * sensitivity * 2.4));
+                cameraYaw.rotation.y -= dx * sensitivity * 0.75;
+                cameraPitch.rotation.x = Math.max(-Math.PI / 6, Math.min(Math.PI / 4, cameraPitch.rotation.x - dy * sensitivity * 0.75));
                 lastLook = { x: event.clientX, y: event.clientY };
             });
             const resetLook = () => { lookPointer = null; lastLook = null; };
@@ -1045,7 +1059,7 @@
                 mainMenu.style.display = 'none';
                 uiLayer.style.display = 'block';
                 document.getElementById('hud').style.opacity = '0.3'; 
-                showMsg(touchDevice ? "TAP JUMP TO DROP • DRAG RIGHT SIDE TO LOOK" : "PRESS SPACE TO JUMP", 10000, "white");
+                showMsg(touchDevice ? "TAP JUMP TO DROP | DRAG RIGHT SIDE TO LOOK" : "PRESS SPACE TO JUMP", 10000, "white");
             } else if (gameState !== 'won' && gameState !== 'dead') {
                 mainMenu.style.display = 'none';
             }
@@ -1054,12 +1068,22 @@
         const raycaster = new THREE.Raycaster();
         const screenCenter = new THREE.Vector2(0, 0);
 
+        function checkForVictory() {
+            if (gameState !== 'playing' || enemies.length !== 0 || remotePlayers.size !== 0) return false;
+            gameState = 'won';
+            careerStats.wins++;
+            saveCareerStats();
+            if (document.exitPointerLock) document.exitPointerLock();
+            uiLayer.style.display = 'none';
+            booyahScreen.style.display = 'flex';
+            return true;
+        }
         function eliminateEnemy(enemy, playerScoredKill = false) {
             const index = enemies.indexOf(enemy);
             if (index === -1) return;
             scene.remove(enemy);
             enemies.splice(index, 1);
-            alive = enemies.length + (gameState === 'dead' ? 0 : 1);
+            alive = enemies.length + remotePlayers.size + (gameState === 'dead' ? 0 : 1);
             uiAlive.innerText = alive;
             if (playerScoredKill) {
                 kills++;
@@ -1067,14 +1091,7 @@
                 careerStats.kills++;
                 saveCareerStats();
             }
-            if (enemies.length === 0 && remotePlayers.size === 0 && gameState !== 'dead') {
-                gameState = 'won';
-                careerStats.wins++;
-                saveCareerStats();
-                if (document.exitPointerLock) document.exitPointerLock();
-                uiLayer.style.display = 'none';
-                booyahScreen.style.display = 'flex';
-            }
+            checkForVictory();
         }
 
         window.addEventListener('mousedown', (e) => {
@@ -1085,8 +1102,10 @@
                 return;
             }
 
-            cameraPitch.rotation.x += 0.05;
-            setTimeout(() => cameraPitch.rotation.x -= 0.05, 100);
+            if (!touchDevice) {
+                cameraPitch.rotation.x += 0.05;
+                setTimeout(() => cameraPitch.rotation.x -= 0.05, 100);
+            }
 
             raycaster.setFromCamera(screenCenter, camera);
             const enemyMeshes = [];
@@ -1310,10 +1329,6 @@
                             interactionMsg.style.display = 'none';
                         }
                         
-                        const distFromCenter = Math.sqrt(playerGroup.position.x**2 + playerGroup.position.z**2);
-                        if (distFromCenter > zoneRadius) {
-                            applyDamage(10 * dt); 
-                        }
 
                     } else if (inVehicle && currentCar) {
                         interactionMsg.style.display = 'none';
@@ -1331,9 +1346,6 @@
                             currentCar.userData.wheels.forEach(w => w.rotation.x += wheelRot);
                         }
                         
-                        const distFromCenter = Math.sqrt(currentCar.position.x**2 + currentCar.position.z**2);
-                        if (distFromCenter > zoneRadius) applyDamage(10 * dt); 
-
                     } else if (inTrain) {
                         interactionMsg.style.display = 'none';
 
@@ -1393,8 +1405,6 @@
                         playerGroup.getWorldPosition(worldPos);
                         cameraYaw.position.copy(worldPos); cameraYaw.position.y += 1.5;
 
-                        const distFromCenter = Math.sqrt(worldPos.x**2 + worldPos.z**2);
-                        if (distFromCenter > zoneRadius) applyDamage(10 * dt); 
                     }
                 }
             }
