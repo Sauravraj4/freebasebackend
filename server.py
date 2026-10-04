@@ -7,6 +7,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import json
+import os
 import secrets
 import sqlite3
 import threading
@@ -14,7 +15,7 @@ import time
 
 ROOT = Path(__file__).resolve().parent
 DB_PATH = ROOT / "onlineff.sqlite3"
-PORT = 8000
+PORT = int(os.environ.get("PORT", "8000"))
 CAPACITY = 60
 STALE_AFTER = 35
 DB_LOCK = threading.Lock()
@@ -75,6 +76,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/":
+            self.path = "/onlineff.html"
+            super().do_GET()
+            return
         if parsed.path == "/api/state":
             token = parse_qs(parsed.query).get("token", [""])[0]
             self.handle_state(token)
@@ -197,5 +202,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     init_db()
-    print(f"OnlineFF server running at http://localhost:{PORT}/onlineff.html")
+    print(f"OnlineFF server running on port {PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

@@ -1,14 +1,23 @@
-# OnlineFF
+﻿# OnlineFF
 
-`onlineff.html` uses a small Python HTTP server and SQLite database for online matchmaking. No MongoDB or third-party Python packages are needed.
+`onlineff.html` is the multiplayer Three.js game. `server.py` serves the game and its matchmaking, presence, position, and player damage API from one web service. It uses SQLite for temporary match sessions; no records are required to play.
 
-## Start the server
+## Run locally
 
-1. Install Python 3 if it is not already installed.
-2. Open a terminal in this folder and run `python server.py`.
-3. Open `http://localhost:8000/onlineff.html` in your browser.
-4. Share the server computer's network address and port `8000` with friends on the same network. For example: `http://192.168.1.20:8000/onlineff.html`.
+```bash
+python server.py
+```
 
-Each match has 60 slots. Human players share their positions and health; open slots are represented as bots. The server stores player sessions in `onlineff.sqlite3` and removes inactive sessions after 35 seconds.
+Open `http://localhost:8000/`. To play together on a local network, share the host computer's network address and port 8000.
 
-To let friends join over the public internet, this server must be hosted on an internet accessible machine and served through HTTPS. The included server is a development prototype; it has no account system or production security hardening. Bot AI and bot eliminations currently run locally in each browser, so only human player positions and player versus player damage are synchronized between clients.
+## Deploy on Render
+
+Create a **Web Service** for this GitHub repository and use:
+
+- **Root Directory:** leave blank
+- **Build Command:** `pip install -r requirements.txt`
+- **Start Command:** `python server.py`
+
+The server binds to Render's `PORT` environment variable and `/` opens the multiplayer game. Share the service's `onrender.com` URL with players. The game synchronizes human positions and player versus player damage; open lobby slots are local browser bots.
+
+SQLite data is temporary on Render's default filesystem and can reset after a restart or redeploy. That is fine for live play because sessions are recreated as players join. Inactive players are removed after 35 seconds. This is a small prototype without accounts or production security hardening.
