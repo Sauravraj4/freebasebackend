@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battle Royale 3D - Perfect Over-The-Shoulder Camera</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #87CEEB; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            user-select: none; 
+        }
+        canvas { 
+            display: block; 
+            width: 100vw; 
+            height: 100vh; 
+        }
+        
+        #uiLayer { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            pointer-events: none; display: none; 
+        }
+        
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; width: 8px; height: 8px;
+            background-color: white; border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 4px rgba(0,0,0,1); display: none;
+        }
+        
+        #hud { 
+            position: absolute; bottom: 30px; left: 30px; 
+            display: flex; gap: 20px; transition: opacity 0.3s; 
+        }
+        .hud-box {
+            background: rgba(0, 0, 0, 0.7); border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 15px 25px; border-radius: 8px; color: white; font-weight: bold; 
+            text-transform: uppercase; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+        .hud-value { font-size: 28px; display: block; margin-top: 5px; }
+        .health-val { color: #2ecc71; }
+        .alive-val { color: #e74c3c; }
+        .kill-val { color: #f39c12; }
+        .weapon-val { color: #f1c40f; font-size: 20px; }
+
+        #interactionMsg {
+            position: absolute; top: 60%; width: 100%; text-align: center;
+            color: white; font-size: 24px; font-weight: bold; text-shadow: 2px 2px 4px black; 
+            display: none;
+        }
+
+        #centerMessage {
+            position: absolute; top: 20%; width: 100%; text-align: center;
+            color: #f1c40f; font-size: 40px; font-weight: 900; text-shadow: 3px 3px 6px black; 
+            display: none; letter-spacing: 2px;
+        }
+
+        #booyahScreen, #deathScreen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 20; color: #f1c40f;
+            pointer-events: auto;
+        }
+        #booyahScreen h1 { 
+            font-size: 8rem; margin: 0; 
+            text-shadow: 0 0 20px #f1c40f, 0 0 40px #e67e22; 
+            animation: pulse 1.5s infinite; 
+        }
+        #deathScreen h1 { font-size: 6rem; margin: 0; color: #e74c3c; text-shadow: 0 0 20px #c0392b; }
+        
+        .restart-btn {
+            padding: 15px 40px; font-size: 24px; font-weight: bold; background: white; color: black;
+            border: none; border-radius: 5px; cursor: pointer; margin-top: 30px;
+        }
+
+        #mainMenu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(40,40,40,0.95) 0%, rgba(10,10,10,1) 100%);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: white; z-index: 10;
+        }
+        #mainMenu h1 { font-size: 5rem; color: #3498db; margin-bottom: 0; text-shadow: 0 4px 15px rgba(52, 152, 219, 0.6); }
+        #careerStats { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 22px; max-width: 760px; }
+        .stat-card { min-width: 125px; padding: 12px 16px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; background: rgba(255,255,255,.08); }
+        .stat-card strong { display: block; color: #f1c40f; font-size: 24px; margin-top: 4px; }
+        .stat-label { color: #bbb; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+        #btnStart {
+            padding: 15px 60px; font-size: 28px; font-weight: bold; background: #e74c3c; color: white;
+            border: none; border-radius: 5px; cursor: pointer; transition: 0.2s; margin-top: 40px;
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        }
+        #btnStart:hover { background: #c0392b; transform: translateY(-2px); }
+        
+        .controls { 
+            margin-top: 30px; background: rgba(255,255,255,0.05); padding: 25px; 
+            border-radius: 10px; font-size: 16px; line-height: 1.8; color: #ccc; text-align: center;
+        }
+        .key { 
+            background: #222; padding: 4px 10px; border-radius: 4px; 
+            border: 1px solid #555; color: white; font-family: monospace; 
+        }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="mainMenu">
+        <h1>BATTLE ROYALE</h1>
+        <h2 style="margin: 8px 0 0; color: #f1c40f;">PLAYER LOBBY</h2>
+        <div id="careerStats">
+            <div class="stat-card"><span class="stat-label">Matches played</span><strong id="statMatches">0</strong></div>
+            <div class="stat-card"><span class="stat-label">Wins</span><strong id="statWins">0</strong></div>
+            <div class="stat-card"><span class="stat-label">Eliminations</span><strong id="statKills">0</strong></div>
+            <div class="stat-card"><span class="stat-label">Headshots</span><strong id="statHeadshots">0</strong></div>
+            <div class="stat-card"><span class="stat-label">Win rate</span><strong id="statWinRate">0%</strong></div>
+        </div>
+        <button id="btnStart">ENTER MATCH</button>
+        <div class="controls">
+            Plane Phase: Wait for right moment, then press <span class="key">SPACE</span> to Jump<br><br>
+            <span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> Move 
+            &nbsp;&nbsp;|&nbsp;&nbsp; 
+            <span class="key">Mouse</span> Look & Aim 
+            &nbsp;&nbsp;|&nbsp;&nbsp; 
+            <span class="key">Left Click</span> Shoot
+            <br>
+            <span class="key">F</span> Enter/Exit Vehicle 
+            &nbsp;&nbsp;|&nbsp;&nbsp; 
+            <span class="key">E</span> Enter/Exit Train
+            &nbsp;&nbsp;|&nbsp;&nbsp; 
+            <span class="key">Space</span> Jump
+        </div>
+    </div>
+
+    <div id="uiLayer">
+        <div id="crosshair"></div>
+        <div id="centerMessage"></div>
+        <div id="interactionMsg">Press [F] to enter vehicle</div>
+        
+        <div id="hud">
+            <div class="hud-box">Health<span class="hud-value health-val" id="uiHealth">100</span></div>
+            <div class="hud-box">Alive<span class="hud-value alive-val" id="uiAlive">60</span></div>
+            <div class="hud-box">Kills<span class="hud-value kill-val" id="uiKills">0</span></div>
+            <div class="hud-box">Weapon<span class="hud-value weapon-val" id="uiWeapon">UNARMED</span></div>
+        </div>
+    </div>
+
+    <div id="booyahScreen">
+        <h1>BOOYAH!</h1>
+        <p style="font-size: 24px; color: white; margin-top: 20px;">Congratulations! You are the last survivor.</p>
+        <button class="restart-btn" onclick="location.reload()">Play Again</button>
+    </div>
+
+    <div id="deathScreen">
+        <h1>ELIMINATED</h1>
+        <button class="restart-btn" onclick="location.reload()">Try Again</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        let gameState = 'menu'; // menu, plane, dropping, playing, won, dead
+        let hp = 100;
+        let alive = 60; // 59 opponents plus the player
+        let kills = 0;
+        let headshots = 0;
+        const careerStats = (() => {
+            try { return { matches: 0, wins: 0, kills: 0, headshots: 0, ...JSON.parse(localStorage.getItem('battleRoyaleCareerStats') || '{}') }; }
+            catch { return { matches: 0, wins: 0, kills: 0, headshots: 0 }; }
+        })();
+        function saveCareerStats() {
+            localStorage.setItem('battleRoyaleCareerStats', JSON.stringify(careerStats));
+            document.getElementById('statMatches').innerText = careerStats.matches;
+            document.getElementById('statWins').innerText = careerStats.wins;
+            document.getElementById('statKills').innerText = careerStats.kills;
+            document.getElementById('statHeadshots').innerText = careerStats.headshots;
+            document.getElementById('statWinRate').innerText = `${careerStats.matches ? Math.round(careerStats.wins / careerStats.matches * 100) : 0}%`;
+        }
+        saveCareerStats();
+        let hasWeapon = false;
+        let inVehicle = false;
+        let inTrain = false;
+        let trainIndex = 0;
+        let gameTime = 0;
+        let velocityY = 0;
+        let isGrounded = true;
+        const colliders = [];
+
+        const dropHeight = 400;
+        const mapSize = 1200;
+        const playerSpeed = 15;
+        const carSpeed = 45;
+
+        const uiHealth = document.getElementById('uiHealth');
+        const uiAlive = document.getElementById('uiAlive');
+        const uiKills = document.getElementById('uiKills');
+        const uiWeapon = document.getElementById('uiWeapon');
+        const centerMessage = document.getElementById('centerMessage');
+        const interactionMsg = document.getElementById('interactionMsg');
+        const mainMenu = document.getElementById('mainMenu');
+        const uiLayer = document.getElementById('uiLayer');
+        const crosshair = document.getElementById('crosshair');
+        const booyahScreen = document.getElementById('booyahScreen');
+        const deathScreen = document.getElementById('deathScreen');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x6eb8e8); 
+        scene.fog = new THREE.FogExp2(0x6eb8e8, 0.0015);
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 3000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(300, 500, 200);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        const d = 600;
+        dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d; dirLight.shadow.camera.bottom = -d;
+        dirLight.shadow.camera.near = 0.5; dirLight.shadow.camera.far = 1500;
+        scene.add(dirLight);
+
+        const floorGeo = new THREE.PlaneGeometry(mapSize, mapSize);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x4a7c35, roughness: 0.9 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const rand = (min, max) => Math.random() * (max - min) + min;
+
+        function createCharacterModel(colorHex) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: colorHex });
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac }); 
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.4, 0.6), mat);
+            torso.position.y = 1.4;
+            torso.castShadow = true;
+            group.add(torso);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), skinMat);
+            head.position.y = 2.4;
+            head.castShadow = true;
+            group.add(head);
+            
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.1), darkMat);
+            visor.position.set(0, 2.45, -0.31);
+            group.add(visor);
+
+            const armGeo = new THREE.BoxGeometry(0.3, 1.2, 0.3);
+            const leftArm = new THREE.Mesh(armGeo, skinMat);
+            leftArm.position.set(-0.7, 1.5, 0);
+            leftArm.castShadow = true;
+            group.add(leftArm);
+            
+            const rightArm = new THREE.Mesh(armGeo, skinMat);
+            rightArm.position.set(0.7, 1.5, 0);
+            rightArm.castShadow = true;
+            group.add(rightArm);
+
+            const legGeo = new THREE.BoxGeometry(0.4, 1.4, 0.4);
+            const pantsMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const leftLeg = new THREE.Mesh(legGeo, pantsMat);
+            leftLeg.position.set(-0.25, 0.7, 0);
+            leftLeg.castShadow = true;
+            group.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, pantsMat);
+            rightLeg.position.set(0.25, 0.7, 0);
+            rightLeg.castShadow = true;
+            group.add(rightLeg);
+
+            group.userData = { leftLeg, rightLeg, leftArm, rightArm, animationTime: 0 };
+            return group;
+        }
+
+        function createAirplane() {
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdcdcdc, metalness: 0.5 });
+            
+            const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 40, 16), bodyMat);
+            fuselage.rotation.x = Math.PI / 2;
+            group.add(fuselage);
+
+            const cockpit = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2, 5), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+            cockpit.position.set(0, 1.8, -15);
+            group.add(cockpit);
+
+            const wings = new THREE.Mesh(new THREE.BoxGeometry(45, 0.8, 8), bodyMat);
+            wings.position.set(0, -0.5, -2);
+            group.add(wings);
+
+            const tailWings = new THREE.Mesh(new THREE.BoxGeometry(16, 0.5, 5), bodyMat);
+            tailWings.position.set(0, 0, 17);
+            group.add(tailWings);
+
+            const tailFin = new THREE.Mesh(new THREE.BoxGeometry(0.8, 7, 5), bodyMat);
+            tailFin.position.set(0, 3.5, 17);
+            group.add(tailFin);
+
+            return group;
+        }
+
+        function createHouse() {
+            const group = new THREE.Group();
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0xeae1c0 }); 
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x8b3a3a }); 
+            
+            const w = 15, h = 10, d = 20;
+            const t = 1; // thickness
+
+            // Left wall
+            const left = new THREE.Mesh(new THREE.BoxGeometry(t, h, d), wallMat);
+            left.position.set(-w/2, h/2, 0); group.add(left);
+            
+            // Right wall
+            const right = new THREE.Mesh(new THREE.BoxGeometry(t, h, d), wallMat);
+            right.position.set(w/2, h/2, 0); group.add(right);
+            
+            // Back wall
+            const back = new THREE.Mesh(new THREE.BoxGeometry(w, h, t), wallMat);
+            back.position.set(0, h/2, -d/2); group.add(back);
+            
+            // Front wall (with door gap)
+            const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(w/2 - 2.5, h, t), wallMat);
+            frontLeft.position.set(-w/4 - 1.25, h/2, d/2); group.add(frontLeft);
+            const frontRight = new THREE.Mesh(new THREE.BoxGeometry(w/2 - 2.5, h, t), wallMat);
+            frontRight.position.set(w/4 + 1.25, h/2, d/2); group.add(frontRight);
+            const frontTop = new THREE.Mesh(new THREE.BoxGeometry(5, h - 7, t), wallMat);
+            frontTop.position.set(0, h - 1.5, d/2); group.add(frontTop);
+
+            const roofGeo = new THREE.CylinderGeometry(w/1.4, w/1.4, d + 2, 4);
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.rotation.z = Math.PI / 4; 
+            roof.rotation.x = Math.PI / 2;
+            roof.position.y = h + (w/2.5); 
+            roof.scale.set(1, 1, 0.7); 
+            roof.castShadow = true;
+            group.add(roof);
+
+            return group;
+        }
+
+        function createCar() {
+            const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2980b9 }); 
+            const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.5, 10), bodyMat);
+            chassis.position.y = 1.2;
+            chassis.castShadow = true;
+            group.add(chassis);
+
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.8, 5), bodyMat);
+            cabin.position.set(0, 2.7, -0.5);
+            cabin.castShadow = true;
+            group.add(cabin);
+
+            const wheelGeo = new THREE.CylinderGeometry(1.0, 1.0, 0.8, 20);
+            wheelGeo.rotateZ(Math.PI / 2);
+            const wheelPositions = [
+                [ 2.3, 1.0,  3.5], [-2.3, 1.0,  3.5], 
+                [ 2.3, 1.0, -3.5], [-2.3, 1.0, -3.5]
+            ];
+            
+            const wheels = [];
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeo, blackMat);
+                wheel.position.set(...pos);
+                wheel.castShadow = true;
+                group.add(wheel);
+                wheels.push(wheel);
+            });
+
+            group.userData = { wheels };
+            return group;
+        }
+
+        const trackRadius = 360;
+        const trackGeo = new THREE.RingGeometry(trackRadius - 5, trackRadius + 5, 64);
+        const trackMat = new THREE.MeshStandardMaterial({ color: 0x222222, side: THREE.DoubleSide });
+        const track = new THREE.Mesh(trackGeo, trackMat);
+        track.rotation.x = -Math.PI / 2;
+        track.position.y = 0.2;
+        scene.add(track);
+
+        function createStation(x, z, rot) {
+            const group = new THREE.Group();
+            const platform = new THREE.Mesh(new THREE.BoxGeometry(50, 4, 15), new THREE.MeshStandardMaterial({color: 0x555555}));
+            platform.position.y = 2;
+            platform.receiveShadow = true;
+            group.add(platform);
+
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(50, 1, 15), new THREE.MeshStandardMaterial({color: 0x8b0000}));
+            roof.position.y = 15;
+            roof.castShadow = true;
+            group.add(roof);
+
+            const pMat = new THREE.MeshStandardMaterial({color: 0x111111});
+            const pGeo = new THREE.CylinderGeometry(0.5, 0.5, 15);
+            [[-20, -5], [20, -5], [-20, 5], [20, 5]].forEach(pos => {
+                const pillar = new THREE.Mesh(pGeo, pMat);
+                pillar.position.set(pos[0], 7.5, pos[1]);
+                pillar.castShadow = true;
+                group.add(pillar);
+            });
+
+            group.position.set(x, 0, z);
+            group.rotation.y = rot;
+            scene.add(group);
+        }
+        
+        createStation(385, 0, 0); 
+        createStation(-385, 0, 0); 
+        createStation(0, 385, Math.PI/2); 
+        createStation(0, -385, Math.PI/2);
+
+        const trainGroups = [];
+        const trainColors = [0xc0392b, 0x2980b9, 0x2980b9, 0x2980b9];
+        for(let i=0; i<4; i++) {
+            const bogie = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({color: trainColors[i]});
+            const isEngine = (i === 0);
+            const w = 10, h = isEngine ? 12 : 10, d = isEngine ? 22 : 20;
+            const t = 1;
+            
+            // Floor
+            const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), mat);
+            floor.position.y = 1; bogie.add(floor);
+            
+            // Left wall
+            const left = new THREE.Mesh(new THREE.BoxGeometry(t, h-1, d), mat);
+            left.position.set(-w/2+t/2, h/2+0.5, 0); bogie.add(left);
+            
+            // Right wall (with door gate)
+            const rightF = new THREE.Mesh(new THREE.BoxGeometry(t, h-1, d/2 - 3), mat);
+            rightF.position.set(w/2-t/2, h/2+0.5, d/4 + 1.5); bogie.add(rightF);
+            const rightB = new THREE.Mesh(new THREE.BoxGeometry(t, h-1, d/2 - 3), mat);
+            rightB.position.set(w/2-t/2, h/2+0.5, -d/4 - 1.5); bogie.add(rightB);
+            const rightTop = new THREE.Mesh(new THREE.BoxGeometry(t, h-8, 6), mat);
+            rightTop.position.set(w/2-t/2, h-2, 0); bogie.add(rightTop);
+            
+            // Back wall
+            const back = new THREE.Mesh(new THREE.BoxGeometry(w, h-1, t), mat);
+            back.position.set(0, h/2+0.5, -d/2+t/2); bogie.add(back);
+            
+            // Front wall
+            const front = new THREE.Mesh(new THREE.BoxGeometry(w, h-1, t), mat);
+            front.position.set(0, h/2+0.5, d/2-t/2); bogie.add(front);
+            
+            // Roof
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), mat);
+            roof.position.y = h; bogie.add(roof);
+
+            scene.add(bogie);
+            trainGroups.push(bogie);
+        }
+        
+        const trainCameraYaw = new THREE.Group();
+        trainCameraYaw.position.set(0, 14, 0);
+
+        const trunkGeo = new THREE.CylinderGeometry(1.5, 2.5, 15, 8);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2314 });
+        const leavesGeo = new THREE.ConeGeometry(9, 25, 8);
+        const leavesMat = new THREE.MeshStandardMaterial({ color: 0x1e5928 });
+
+        for (let i = 0; i < 120; i++) {
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 7.5;
+            trunk.castShadow = true; trunk.receiveShadow = true;
+            const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+            leaves.position.y = 22;
+            leaves.castShadow = true; leaves.receiveShadow = true;
+            tree.add(trunk); tree.add(leaves);
+
+            let tx, tz;
+            do { tx = rand(-mapSize/2.1, mapSize/2.1); tz = rand(-mapSize/2.1, mapSize/2.1);
+            } while ((Math.abs(tx) < 50 && Math.abs(tz) < 50) || Math.abs(Math.sqrt(tx*tx + tz*tz) - trackRadius) < 30); 
+            tree.position.set(tx, 0, tz);
+            scene.add(tree);
+            tree.updateMatrixWorld(true);
+            colliders.push(new THREE.Box3().setFromObject(trunk));
+        }
+
+        for (let i = 0; i < 15; i++) {
+            const house = createHouse();
+            let hx, hz;
+            do { hx = rand(-mapSize/2.5, mapSize/2.5); hz = rand(-mapSize/2.5, mapSize/2.5);
+            } while ((Math.abs(hx) < 30 && Math.abs(hz) < 30) || Math.abs(Math.sqrt(hx*hx + hz*hz) - trackRadius) < 40); 
+            house.position.set(hx, 0, hz);
+            house.rotation.y = Math.floor(rand(0, 4)) * (Math.PI / 2);
+            scene.add(house);
+            house.updateMatrixWorld(true);
+            house.children.forEach(child => {
+                if (child.geometry && child.geometry.type === 'BoxGeometry') {
+                    colliders.push(new THREE.Box3().setFromObject(child));
+                }
+            });
+        }
+
+        const airplane = createAirplane();
+        airplane.position.set(0, dropHeight, mapSize/2 + 200);
+        scene.add(airplane);
+
+        const playerGroup = new THREE.Group();
+        const playerModel = createCharacterModel(0x3498db); 
+        playerGroup.add(playerModel);
+        scene.add(playerGroup);
+
+        const parachuteGeo = new THREE.SphereGeometry(6, 20, 20, 0, Math.PI * 2, 0, Math.PI / 2);
+        const parachuteMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c, side: THREE.DoubleSide });
+        const parachute = new THREE.Mesh(parachuteGeo, parachuteMat);
+        parachute.position.y = 8;
+        parachute.visible = false;
+        playerGroup.add(parachute); 
+        
+        const handWeapon = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.4, 2.0), new THREE.MeshStandardMaterial({ color: 0x222 }));
+        handWeapon.position.set(0.9, 1.6, -0.8);
+        handWeapon.visible = false;
+        playerGroup.add(handWeapon);
+
+        // --- PERFECT OVER-THE-SHOULDER CAMERA RIG ---
+        const cameraYaw = new THREE.Group();
+        const cameraPitch = new THREE.Group();
+        cameraYaw.position.set(0, 2, 0);
+        cameraPitch.position.set(0.8, 0.3, 4.2); // Adjusted for new yaw height
+        scene.add(cameraYaw);
+        cameraYaw.add(cameraPitch);
+        cameraPitch.add(camera);
+
+        const lootGroups = [];
+        for (let i = 0; i < 30; i++) {
+            const lg = new THREE.Group();
+            const lootBox = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 2), new THREE.MeshStandardMaterial({ color: 0x444 }));
+            const glowGeo = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.3, 2.3), new THREE.MeshBasicMaterial({ color: 0xf1c40f, wireframe: true }));
+            lg.add(lootBox); lg.add(glowGeo);
+            lg.position.set(rand(-mapSize/2.2, mapSize/2.2), 0.5, rand(-mapSize/2.2, mapSize/2.2));
+            scene.add(lg);
+            lootGroups.push(lg);
+        }
+
+        let currentCar = null;
+        const cars = [];
+        for (let i = 0; i < 15; i++) {
+            const c = createCar();
+            c.position.set(rand(-mapSize/2.2, mapSize/2.2), 0, rand(-mapSize/2.2, mapSize/2.2));
+            scene.add(c);
+            cars.push(c);
+        }
+
+        let zoneRadius = mapSize / 1.8;
+        const safeZone = new THREE.Mesh(
+            new THREE.CylinderGeometry(1, 1, 400, 40, 1, true),
+            new THREE.MeshBasicMaterial({ color: 0x3498db, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false })
+        );
+        safeZone.position.y = 200;
+        scene.add(safeZone);
+
+        const enemies = [];
+        for(let i = 0; i < alive - 1; i++) {
+            const enemyGroup = createCharacterModel(0xe74c3c); 
+            enemyGroup.position.set(rand(-500, 500), 0, rand(-500, 500));
+            enemyGroup.userData.direction = new THREE.Vector3(rand(-1,1), 0, rand(-1,1)).normalize();
+            enemyGroup.userData.speed = rand(4, 7);
+            enemyGroup.userData.changeTimer = 0;
+            enemyGroup.userData.health = 100;
+            enemyGroup.userData.attackTimer = rand(0.3, 1.2);
+            scene.add(enemyGroup);
+            enemies.push(enemyGroup);
+        }
+
+        const keys = { w: false, a: false, s: false, d: false, space: false };
+        let pointerLocked = false;
+
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (keys.hasOwnProperty(key)) keys[key] = true;
+            if (key === ' ') {
+                keys.space = true;
+                if (gameState === 'plane') {
+                    gameState = 'dropping';
+                    playerGroup.position.copy(airplane.position);
+                    playerGroup.position.y -= 10; 
+                    parachute.visible = true;
+                    
+                    cameraYaw.position.copy(playerGroup.position); cameraYaw.position.y += 1.5;
+                    camera.position.set(0, 5, 20); // Far view during drop
+                    camera.rotation.set(0, 0, 0);
+                    showMsg("PARACHUTE DEPLOYED", 3000, "#3498db");
+                    crosshair.style.display = 'block';
+                } else if (gameState === 'playing' && isGrounded && !inVehicle) {
+                    velocityY = 25;
+                    isGrounded = false;
+                }
+            }
+            
+            // CAR INTERACTION
+            if (key === 'f' && gameState === 'playing' && !inTrain) {
+                if (inVehicle) {
+                    inVehicle = false;
+                    playerGroup.position.copy(currentCar.position);
+                    playerGroup.position.x += 5; 
+                    playerGroup.position.y = 0;
+                    playerModel.visible = true;
+                    if(hasWeapon) handWeapon.visible = true;
+                    cameraYaw.position.copy(playerGroup.position); cameraYaw.position.y += 1.5;
+                    cameraPitch.position.set(0.8, 3.8, 7.2); // Restore camera
+                    currentCar = null;
+                } else {
+                    for (let c of cars) {
+                        if (playerGroup.position.distanceTo(c.position) < 8) {
+                            inVehicle = true;
+                            currentCar = c;
+                            playerModel.visible = false;
+                            handWeapon.visible = false;
+                            cameraYaw.position.copy(c.position); cameraYaw.position.y += 1.5;
+                            cameraPitch.position.set(0, 3.5, 0); // Camera inside vehicle
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // TRAIN INTERACTION
+            if (key === 'e' && gameState === 'playing' && !inVehicle) {
+                if (inTrain) {
+                    inTrain = false;
+                    const worldPos = new THREE.Vector3();
+                    playerGroup.getWorldPosition(worldPos);
+                    scene.add(playerGroup);
+                    playerGroup.position.copy(worldPos);
+                    playerGroup.position.y = 0;
+                    playerModel.visible = true;
+                    if(hasWeapon) handWeapon.visible = true;
+                    cameraYaw.position.copy(playerGroup.position); cameraYaw.position.y += 1.5;
+                    cameraPitch.position.set(0.8, 0.3, 4.2); // Restore camera
+                } else {
+                    for(let i=0; i<trainGroups.length; i++) {
+                        if (playerGroup.position.distanceTo(trainGroups[i].position) < 20) {
+                            inTrain = true;
+                            trainIndex = i;
+                            trainGroups[i].add(playerGroup);
+                            playerGroup.position.set(0, 1, 0); // Inside train
+                            playerModel.visible = true; // KEEP PLAYER VISIBLE
+                            cameraPitch.position.set(0, 4, 10); // Better angle inside train
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (keys.hasOwnProperty(key)) keys[key] = false;
+            if (key === ' ') keys.space = false;
+        });
+
+        const sensitivity = 0.003;
+        
+        document.addEventListener('mousemove', (e) => {
+            if (pointerLocked || e.buttons === 1 || e.buttons === 2) {
+                if (gameState === 'plane') return; 
+
+                cameraYaw.rotation.y -= e.movementX * sensitivity;
+                cameraPitch.rotation.x -= e.movementY * sensitivity;
+                cameraPitch.rotation.x = Math.max(-Math.PI/6, Math.min(Math.PI/4, cameraPitch.rotation.x));
+            }
+        });
+
+        document.getElementById('btnStart').addEventListener('click', async () => {
+            try {
+                await document.body.requestPointerLock();
+            } catch (err) {
+                console.log("Pointer lock denied, fallback to drag controls.");
+                pointerLocked = true; 
+                startGamePhase();
+            }
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === document.body) {
+                pointerLocked = true;
+                startGamePhase();
+            } else {
+                pointerLocked = false;
+                if (gameState === 'playing' || gameState === 'dropping') {
+                    mainMenu.style.display = 'flex';
+                    document.querySelector('#mainMenu h1').innerText = "PAUSED";
+                    document.querySelector('#btnStart').innerText = "RESUME";
+                }
+            }
+        });
+
+        function startGamePhase() {
+            if (gameState === 'menu') {
+                gameState = 'plane';
+                careerStats.matches++;
+                saveCareerStats();
+                mainMenu.style.display = 'none';
+                uiLayer.style.display = 'block';
+                document.getElementById('hud').style.opacity = '0.3'; 
+                showMsg("PRESS SPACE TO JUMP", 10000, "white");
+            } else if (gameState !== 'won' && gameState !== 'dead') {
+                mainMenu.style.display = 'none';
+            }
+        }
+
+        const raycaster = new THREE.Raycaster();
+        const screenCenter = new THREE.Vector2(0, 0);
+
+        function eliminateEnemy(enemy, playerScoredKill = false) {
+            const index = enemies.indexOf(enemy);
+            if (index === -1) return;
+            scene.remove(enemy);
+            enemies.splice(index, 1);
+            alive = enemies.length + (gameState === 'dead' ? 0 : 1);
+            uiAlive.innerText = alive;
+            if (playerScoredKill) {
+                kills++;
+                uiKills.innerText = kills;
+                careerStats.kills++;
+                saveCareerStats();
+            }
+            if (enemies.length === 0 && gameState !== 'dead') {
+                gameState = 'won';
+                careerStats.wins++;
+                saveCareerStats();
+                if (document.exitPointerLock) document.exitPointerLock();
+                uiLayer.style.display = 'none';
+                booyahScreen.style.display = 'flex';
+            }
+        }
+
+        window.addEventListener('mousedown', (e) => {
+            if (gameState !== 'playing' || inVehicle || !pointerLocked) return;
+
+            if (!hasWeapon) {
+                showMsg("FIND WEAPON CRATE!", 1000, "#e74c3c");
+                return;
+            }
+
+            cameraPitch.rotation.x += 0.05;
+            setTimeout(() => cameraPitch.rotation.x -= 0.05, 100);
+
+            raycaster.setFromCamera(screenCenter, camera);
+            const enemyMeshes = [];
+            enemies.forEach(eGrp => eGrp.children.forEach(mesh => enemyMeshes.push(mesh)));
+
+            const intersects = raycaster.intersectObjects(enemyMeshes);
+
+            if (intersects.length > 0) {
+                const hitMesh = intersects[0].object;
+                const enemyGroup = hitMesh.parent; 
+                const wasHeadshot = hitMesh === enemyGroup.children[1];
+                
+                eliminateEnemy(enemyGroup, true);
+                if (wasHeadshot) {
+                    headshots++;
+                    careerStats.headshots++;
+                    saveCareerStats();
+                }
+                showMsg("ENEMY ELIMINATED", 1000, "#e74c3c");
+            }
+        });
+
+        function showMsg(text, time, color = "white") {
+            centerMessage.innerText = text;
+            centerMessage.style.color = color;
+            centerMessage.style.display = 'block';
+            if (window.msgTimeout) clearTimeout(window.msgTimeout);
+            window.msgTimeout = setTimeout(() => { if (gameState !== 'won' && gameState !== 'dead') centerMessage.style.display = 'none'; }, time);
+        }
+
+        function applyDamage(amount) {
+            hp -= amount;
+            uiHealth.innerText = Math.max(0, Math.floor(hp));
+            if (hp <= 0 && gameState === 'playing') {
+                gameState = 'dead';
+                if (document.exitPointerLock) document.exitPointerLock();
+                uiLayer.style.display = 'none';
+                deathScreen.style.display = 'flex';
+            }
+        }
+
+        function animateLimbs(group, isMoving, dt) {
+            const data = group.userData;
+            if (!data.leftLeg) return;
+            
+            if (isMoving) {
+                data.animationTime += dt * 15;
+                const swing = Math.sin(data.animationTime) * 0.8;
+                data.leftLeg.rotation.x = swing;
+                data.rightLeg.rotation.x = -swing;
+                data.leftArm.rotation.x = -swing;
+                data.rightArm.rotation.x = swing;
+            } else {
+                data.leftLeg.rotation.x = 0; data.rightLeg.rotation.x = 0;
+                data.leftArm.rotation.x = 0; data.rightArm.rotation.x = 0;
+            }
+        }
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.1); 
+            
+            if (gameState !== 'menu' && gameState !== 'dead' && gameState !== 'won') {
+                gameTime += dt;
+            }
+
+            if (gameState === 'playing' || gameState === 'dropping' || gameState === 'plane') {
+                if (zoneRadius > 20) zoneRadius -= 1.5 * dt; 
+                safeZone.scale.set(zoneRadius, 1, zoneRadius);
+            }
+
+            const trainSpeed = 0.25;
+            for(let i=0; i<trainGroups.length; i++) {
+                const offset = i * 0.07; 
+                const angle = -(gameTime * trainSpeed) + offset;
+                trainGroups[i].position.set(Math.cos(angle) * trackRadius, 0, Math.sin(angle) * trackRadius);
+                trainGroups[i].rotation.y = -angle + Math.PI; 
+            }
+
+            if (gameState === 'plane') {
+                airplane.position.z -= 100 * dt;
+                cameraYaw.position.copy(airplane.position);
+                camera.position.set(0, 25, 60);
+                camera.lookAt(airplane.position);
+
+                if (airplane.position.z < -mapSize/2 - 100) {
+                    keys.space = true;
+                    document.dispatchEvent(new KeyboardEvent('keydown', {key: ' '})); 
+                }
+            }
+
+            if (pointerLocked || gameState !== 'menu') {
+                
+                if (gameState === 'dropping') {
+                    playerGroup.position.y -= 25 * dt; 
+
+                    const dir = new THREE.Vector3();
+                    if (keys.w) dir.z = -1; if (keys.s) dir.z = 1;
+                    if (keys.a) dir.x = -1; if (keys.d) dir.x = 1;
+                    
+                    if (dir.length() > 0) {
+                        dir.normalize();
+                        dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw.rotation.y);
+                        playerGroup.position.addScaledVector(dir, 20 * dt);
+                    }
+                    
+                    cameraYaw.position.copy(playerGroup.position); cameraYaw.position.y += 1.5;
+
+                    if (playerGroup.position.y <= 0) {
+                        playerGroup.position.y = 0;
+                        gameState = 'playing';
+                        parachute.visible = false; 
+                        document.getElementById('hud').style.opacity = '1';
+                        camera.position.set(0, 0, 0); // Snap back to close camera
+                        showMsg("TOUCHDOWN", 1500);
+                    }
+                } 
+                else if (gameState === 'playing') {
+                    
+                    if (!inVehicle && !inTrain) {
+                        cameraYaw.position.copy(playerGroup.position); cameraYaw.position.y += 1.5;
+
+                        const moveInput = new THREE.Vector3();
+                        if (keys.w) moveInput.z -= 1; 
+                        if (keys.s) moveInput.z += 1;
+                        if (keys.a) moveInput.x -= 1; 
+                        if (keys.d) moveInput.x += 1;
+
+                        const isMoving = moveInput.length() > 0;
+                        if (isMoving) {
+                            moveInput.normalize();
+                            const moveDir = moveInput.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw.rotation.y);
+                            
+                            const oldPos = playerGroup.position.clone();
+                            playerGroup.position.addScaledVector(moveDir, playerSpeed * dt);
+                            
+                            // Collision Check
+                            playerGroup.updateMatrixWorld(true);
+                            const pBox = new THREE.Box3().setFromCenterAndSize(
+                                new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 0.7, playerGroup.position.z), 
+                                new THREE.Vector3(0.8, 1.4, 0.8)
+                            );
+                            let collided = false;
+                            for (let i=0; i<colliders.length; i++) {
+                                if (colliders[i].intersectsBox(pBox)) { collided = true; break; }
+                            }
+                            if (collided) playerGroup.position.copy(oldPos);
+
+                            const targetRotation = Math.atan2(moveDir.x, moveDir.z);
+                            let diff = targetRotation - playerGroup.rotation.y;
+                            while (diff < -Math.PI) diff += Math.PI * 2;
+                            while (diff > Math.PI) diff -= Math.PI * 2;
+                            playerGroup.rotation.y += diff * 10 * dt;
+                        }
+                        
+                        animateLimbs(playerModel, isMoving, dt);
+
+                        if (!isGrounded) {
+                            velocityY -= 60 * dt;
+                            playerGroup.position.y += velocityY * dt;
+                            if (playerGroup.position.y <= 0) {
+                                playerGroup.position.y = 0;
+                                isGrounded = true;
+                                velocityY = 0;
+                            }
+                        }
+
+                        if (!hasWeapon) {
+                            for (let i = 0; i < lootGroups.length; i++) {
+                                let lg = lootGroups[i];
+                                if (lg.parent && playerGroup.position.distanceTo(lg.position) < 4) {
+                                    scene.remove(lg);
+                                    hasWeapon = true;
+                                    handWeapon.visible = true;
+                                    uiWeapon.innerText = "ASSAULT RIFLE";
+                                    showMsg("WEAPON ACQUIRED", 2000, "#f1c40f");
+                                    break;
+                                }
+                            }
+                        }
+
+                        let distToTrain = Infinity;
+                        trainGroups.forEach(tg => { distToTrain = Math.min(distToTrain, playerGroup.position.distanceTo(tg.position)); });
+                        
+                        let distToCar = Infinity;
+                        cars.forEach(c => distToCar = Math.min(distToCar, playerGroup.position.distanceTo(c.position)));
+                        
+                        if (distToCar < 8) {
+                            interactionMsg.innerText = "Press [F] to enter vehicle";
+                            interactionMsg.style.display = 'block';
+                        } else if (distToTrain < 20) {
+                            interactionMsg.innerText = "Press [E] to board train";
+                            interactionMsg.style.display = 'block';
+                        } else {
+                            interactionMsg.style.display = 'none';
+                        }
+                        
+                        const distFromCenter = Math.sqrt(playerGroup.position.x**2 + playerGroup.position.z**2);
+                        if (distFromCenter > zoneRadius) {
+                            applyDamage(10 * dt); 
+                        }
+
+                    } else if (inVehicle && currentCar) {
+                        interactionMsg.style.display = 'none';
+                        cameraYaw.position.copy(currentCar.position);
+
+                        let speed = 0;
+                        if (keys.w) speed = carSpeed;
+                        if (keys.s) speed = -carSpeed / 2; 
+                        
+                        if (speed !== 0) {
+                            if (keys.a) currentCar.rotation.y += 2 * dt;
+                            if (keys.d) currentCar.rotation.y -= 2 * dt;
+                            currentCar.translateZ(-speed * dt); 
+                            const wheelRot = (speed > 0) ? 15 * dt : -15 * dt;
+                            currentCar.userData.wheels.forEach(w => w.rotation.x += wheelRot);
+                        }
+                        
+                        const distFromCenter = Math.sqrt(currentCar.position.x**2 + currentCar.position.z**2);
+                        if (distFromCenter > zoneRadius) applyDamage(10 * dt); 
+
+                    } else if (inTrain) {
+                        interactionMsg.style.display = 'none';
+
+                        const moveInput = new THREE.Vector3();
+                        if (keys.w) moveInput.z -= 1; 
+                        if (keys.s) moveInput.z += 1;
+                        if (keys.a) moveInput.x -= 1; 
+                        if (keys.d) moveInput.x += 1;
+
+                        const isMoving = moveInput.length() > 0;
+                        if (isMoving) {
+                            moveInput.normalize();
+                            const worldDir = moveInput.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw.rotation.y);
+                            const localDir = worldDir.clone().applyQuaternion(trainGroups[trainIndex].quaternion.clone().invert());
+                            
+                            playerGroup.position.addScaledVector(localDir, playerSpeed * dt);
+
+                            const targetRotation = Math.atan2(localDir.x, localDir.z);
+                            let diff = targetRotation - playerGroup.rotation.y;
+                            while (diff < -Math.PI) diff += Math.PI * 2;
+                            while (diff > Math.PI) diff -= Math.PI * 2;
+                            playerGroup.rotation.y += diff * 10 * dt;
+                        }
+                        animateLimbs(playerModel, isMoving, dt);
+
+                        if (!isGrounded) {
+                            velocityY -= 60 * dt;
+                            playerGroup.position.y += velocityY * dt;
+                            if (playerGroup.position.y <= 1) { // train floor height
+                                playerGroup.position.y = 1;
+                                isGrounded = true;
+                                velocityY = 0;
+                            }
+                        }
+
+                        // Jumping between bogies
+                        if (playerGroup.position.z > 10.5 && trainIndex > 0) {
+                            trainIndex--;
+                            trainGroups[trainIndex].add(playerGroup);
+                            playerGroup.position.z = -10;
+                        } else if (playerGroup.position.z < -10.5 && trainIndex < trainGroups.length - 1) {
+                            trainIndex++;
+                            trainGroups[trainIndex].add(playerGroup);
+                            playerGroup.position.z = 10;
+                        } else if (Math.abs(playerGroup.position.z) > 13 || Math.abs(playerGroup.position.x) > 6) {
+                            // Fell off
+                            inTrain = false;
+                            const worldPos = new THREE.Vector3();
+                            playerGroup.getWorldPosition(worldPos);
+                            scene.add(playerGroup);
+                            playerGroup.position.copy(worldPos);
+                            playerGroup.position.y = 0;
+                            cameraPitch.position.set(0.8, 0.3, 4.2);
+                        }
+
+                        const worldPos = new THREE.Vector3();
+                        playerGroup.getWorldPosition(worldPos);
+                        cameraYaw.position.copy(worldPos); cameraYaw.position.y += 1.5;
+
+                        const distFromCenter = Math.sqrt(worldPos.x**2 + worldPos.z**2);
+                        if (distFromCenter > zoneRadius) applyDamage(10 * dt); 
+                    }
+                }
+            }
+
+            if (gameState === 'playing' || gameState === 'dropping') {
+                const playerTarget = inVehicle && currentCar ? currentCar.position : playerGroup.position;
+                for (const enemy of [...enemies]) {
+                    let target = playerTarget;
+                    let targetEnemy = null;
+                    let closestEnemyDistance = 90;
+                    for (const other of enemies) {
+                        if (other === enemy) continue;
+                        const distance = enemy.position.distanceTo(other.position);
+                        if (distance < closestEnemyDistance) {
+                            closestEnemyDistance = distance;
+                            targetEnemy = other;
+                        }
+                    }
+                    const playerDistance = enemy.position.distanceTo(playerTarget);
+                    if (targetEnemy && closestEnemyDistance < playerDistance) target = targetEnemy.position;
+
+                    const direction = new THREE.Vector3().subVectors(target, enemy.position);
+                    direction.y = 0;
+                    const distanceToTarget = direction.length();
+                    if (distanceToTarget > 0.001) direction.normalize();
+                    enemy.userData.direction.copy(direction);
+                    enemy.rotation.y = Math.atan2(direction.x, direction.z);
+
+                    if (distanceToTarget > 7) {
+                        enemy.position.addScaledVector(direction, enemy.userData.speed * dt);
+                        animateLimbs(enemy, true, dt);
+                    } else {
+                        animateLimbs(enemy, false, dt);
+                        enemy.userData.attackTimer -= dt;
+                        if (enemy.userData.attackTimer <= 0) {
+                            enemy.userData.attackTimer = 0.8;
+                            if (targetEnemy && enemies.includes(targetEnemy)) {
+                                targetEnemy.userData.health -= 25;
+                                if (targetEnemy.userData.health <= 0) eliminateEnemy(targetEnemy);
+                            } else if (gameState === 'playing') {
+                                applyDamage(8);
+                            }
+                        }
+                    }
+
+                    const limit = mapSize / 2 - 20;
+                    enemy.position.x = THREE.MathUtils.clamp(enemy.position.x, -limit, limit);
+                    enemy.position.z = THREE.MathUtils.clamp(enemy.position.z, -limit, limit);
+                    if (Math.hypot(enemy.position.x, enemy.position.z) > zoneRadius) {
+                        enemy.userData.health -= 10 * dt;
+                        if (enemy.userData.health <= 0) eliminateEnemy(enemy);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

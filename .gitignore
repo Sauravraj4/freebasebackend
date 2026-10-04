@@ -1,0 +1,7 @@
+﻿__pycache__/
+*.py[cod]
+.venv/
+venv/
+onlineff.sqlite3
+onlineff.sqlite3-shm
+onlineff.sqlite3-wal
